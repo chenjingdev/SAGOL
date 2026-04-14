@@ -29,7 +29,10 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. The noise-sensitivity gate runs on one baseline long-horizon task and shows that injecting 10k tokens of garbage **measurably degrades** `task_success` or `total_tokens` on the chosen benchmark (if it doesn't, the benchmark is swapped before Phase 1 starts).
   4. `PINNED_VERSIONS.md` records pinned Claude Code and Bun versions and every downstream measurement automatically attaches them as metadata.
   5. The dated kill ceremony is on the calendar and both outcomes on that date — verdict committed, OR automatic project failure — are mechanically enforced.
-**Plans**: TBD
+**Plans**: 3 plans
+- [ ] 00-01-PLAN.md — Tree hygiene: verify existing Phase 0 skeleton, create project-local .claude/settings.json, run bun install
+- [ ] 00-02-PLAN.md — Missing scripts (canary/noise-gate/doctor/pinned-hash) + lock in PINNED_VERSIONS.md
+- [ ] 00-03-PLAN.md — Live leakage canary fire + chmod 444 + topological Phase 0 commit chain
 
 ### Phase 1: Stripping path
 **Goal**: Prove the hypothesis mechanism works end-to-end — sub-agent reports funnel through `sagol_write_report`, get captured to disk, and are replaced in the main agent's context with a ≤200-token stripped form via `PostToolUse` + `updatedMCPToolOutput`, with zero body text leaking upstream.
