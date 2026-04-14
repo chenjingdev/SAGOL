@@ -12,30 +12,33 @@ SAGOL is a hypothesis-validation rig disguised as a tool. The roadmap is organiz
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 0: Pre-flight gates** - Kill Day 1 if the mechanism or benchmark is already broken
-- [ ] **Phase 1: Stripping path** - Prove report bodies never reach the main agent's context
+- [x] **Phase 0: Pre-flight gates** - Closed with caveat on 2026-04-15 (canary RED in headless mode, kill-switch overridden by user pivot)
+- [ ] **Phase 1: Stripping path** - Prove report bodies never reach the main agent's context **(interactive mode only)**
 - [ ] **Phase 2: Dashboard + bidirectional feedback** - Human inspection surface + caveman lift finalized
-- [ ] **Phase 3: Eval-runner + SWE-bench Pro + writeup** - Fire the kill-switch and commit the verdict
+- [ ] **Phase 3: Benchmark (method TBD)** - Redesigned after Phases 1 and 2 complete
 
 ## Phase Details
 
-### Phase 0: Pre-flight gates
-**Goal**: Prove on Day 1 that the stripping mechanism is architecturally viable AND the chosen benchmark is sensitive to context noise — otherwise kill or switch benchmark before any real build work.
+### Phase 0: Pre-flight gates — CLOSED WITH CAVEAT (2026-04-15)
+**Goal (original)**: Prove on Day 1 that the stripping mechanism is architecturally viable AND the chosen benchmark is sensitive to context noise — otherwise kill or switch benchmark before any real build work.
+**Outcome**: The Day-1 leakage canary fired RED on all three rescue attempts. Root cause identified: **`claude -p` headless mode does not load project-local `PostToolUse` hooks** on Claude Code 2.1.108 (see `.planning/research/HEADLESS_HOOK_LIMITATION.md`). Per KILL_SWITCH.md strict reading, this would end v1. User explicitly **overrode the Day-1 kill ceremony** ("벤치는 다른방법으로 할테니 앱부터 완성해보자") and elected to:
+  - Close Phase 0 with a documented limitation instead of killing the project.
+  - Narrow Phase 1 to **interactive mode only**.
+  - Defer Phase 3 entirely — the SWE-bench Pro harness is abandoned; a new benchmark method will be proposed after Phases 1 and 2 complete.
 **Depends on**: Nothing (first phase)
-**Requirements**: GATE-01, GATE-02, GATE-03, GATE-04, GATE-05
-**Success Criteria** (what must be TRUE):
-  1. `KILL_SWITCH.md` is committed with a one-line single-variable hypothesis, explicit kill thresholds, and a dated kill ceremony (e.g., 2026-04-28); file is marked immutable after commit.
-  2. The Day 1 leakage canary runs and returns **0 hits** when grepping the next Claude Code API request payload for the random 128-bit token written into a SAGOL report body (if it finds hits, the project dies on Day 1 — that is the design).
-  3. The noise-sensitivity gate runs on one baseline long-horizon task and shows that injecting 10k tokens of garbage **measurably degrades** `task_success` or `total_tokens` on the chosen benchmark (if it doesn't, the benchmark is swapped before Phase 1 starts).
-  4. `PINNED_VERSIONS.md` records pinned Claude Code and Bun versions and every downstream measurement automatically attaches them as metadata.
-  5. The dated kill ceremony is on the calendar and both outcomes on that date — verdict committed, OR automatic project failure — are mechanically enforced.
+**Requirements**: GATE-01 ✓ (committed, not chmod-locked), GATE-02 ✗ (failed, override), GATE-03 ✓ (dry-run green in 00-02), GATE-04 ✓ (committed, not chmod-locked), GATE-05 ✗ (superseded by override)
 **Plans**: 3 plans
-- [ ] 00-01-PLAN.md — Tree hygiene: verify existing Phase 0 skeleton, create project-local .claude/settings.json, run bun install
-- [ ] 00-02-PLAN.md — Missing scripts (canary/noise-gate/doctor/pinned-hash) + lock in PINNED_VERSIONS.md
-- [ ] 00-03-PLAN.md — Live leakage canary fire + chmod 444 + topological Phase 0 commit chain
+- [x] 00-01-PLAN.md — Tree hygiene: verify existing Phase 0 skeleton, create project-local .claude/settings.json, run bun install
+- [x] 00-02-PLAN.md — Missing scripts (canary/noise-gate/doctor/pinned-hash) + lock in PINNED_VERSIONS.md
+- [x] 00-03-PLAN.md — Live leakage canary fire (RED ×3) + rescue diagnosis + Phase 0 close-out
+**Artifacts:**
+- `.planning/phases/00-pre-flight-gates/00-CANARY-RESULT.md` — full per-run verdict
+- `.planning/research/HEADLESS_HOOK_LIMITATION.md` — architectural finding + revival conditions
+- `.planning/phases/00-pre-flight-gates/00-03-SUMMARY.md` — plan outcome + lessons
 
-### Phase 1: Stripping path
-**Goal**: Prove the hypothesis mechanism works end-to-end — sub-agent reports funnel through `sagol_write_report`, get captured to disk, and are replaced in the main agent's context with a ≤200-token stripped form via `PostToolUse` + `updatedMCPToolOutput`, with zero body text leaking upstream.
+### Phase 1: Stripping path (interactive mode only)
+**Goal**: Prove the hypothesis mechanism works end-to-end **in a live interactive Claude Code session** — sub-agent reports funnel through `sagol_write_report`, get captured to disk, and are replaced in the main agent's context with a ≤200-token stripped form via `PostToolUse` + `updatedMCPToolOutput`, with zero body text leaking upstream. **Headless `claude -p` support is explicitly out of scope** per the Phase 0 architectural finding.
+**Pre-task 0 (HARD GATE)**: In this very Claude Code session (or a comparable interactive session), call `mcp__sagol__write_report` via the Skill/Task tool and verify that (a) the tool fires, (b) a report file appears under `.sagol/reports/`, AND (c) the tool_response the parent agent sees is the `[report:<id>] <title>\n<summary>` stripped form, not the full body. If this pre-task fails, the entire project is architecturally dead and kill becomes the only remaining option — escalate to user immediately.
 **Depends on**: Phase 0
 **Requirements**: INST-01, INST-02, CAP-01, CAP-02, CAP-03, CAP-04, CAP-05
 **Success Criteria** (what must be TRUE):
@@ -59,8 +62,9 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: TBD
 **UI hint**: yes
 
-### Phase 3: Eval-runner + SWE-bench Pro + writeup
-**Goal**: Fire the kill-switch. Run baseline vs SAGOL interleaved on SWE-bench Pro through a ≤300 LOC `bunx sagol eval` harness that spawns the Python harness out-of-process, write `SPIKE-RESULTS.md` + bilingual README, and commit the one-sentence verdict on the dated kill ceremony — continue or kill.
+### Phase 3: Benchmark (method TBD — redesigned)
+**Status**: Deferred on 2026-04-15. Original SWE-bench Pro harness abandoned because `claude -p` headless mode does not load the stripping hook (see `HEADLESS_HOOK_LIMITATION.md`). User will propose a new benchmark approach after Phase 1 and Phase 2 are complete. This section is kept as a placeholder and will be rewritten.
+**Original Goal (archived)**: Fire the kill-switch. Run baseline vs SAGOL interleaved on SWE-bench Pro through a ≤300 LOC `bunx sagol eval` harness that spawns the Python harness out-of-process, write `SPIKE-RESULTS.md` + bilingual README, and commit the one-sentence verdict on the dated kill ceremony — continue or kill.
 **Depends on**: Phase 1 (Phase 2 may run in calendar parallel with the baseline branch of Phase 3)
 **Requirements**: EVAL-01, EVAL-02, EVAL-03, EVAL-04, EVAL-05, EVAL-06, EVAL-07, DOC-01, DOC-02, DOC-03
 **Success Criteria** (what must be TRUE):
@@ -79,7 +83,7 @@ Phases execute in numeric order: 0 → 1 → 2 → 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 0. Pre-flight gates | 0/TBD | Not started | - |
-| 1. Stripping path | 0/TBD | Not started | - |
+| 0. Pre-flight gates | 3/3 | **Closed with caveat** (canary RED, kill overridden by user pivot) | 2026-04-15 |
+| 1. Stripping path (interactive) | 0/TBD | Not started | - |
 | 2. Dashboard + feedback | 0/TBD | Not started | - |
-| 3. Eval + SWE-bench Pro + writeup | 0/TBD | Not started | - |
+| 3. Benchmark (method TBD) | — | **Deferred — will be redesigned after Phase 1/2** | - |
