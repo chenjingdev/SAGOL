@@ -38,16 +38,20 @@ Decimal phases appear between their surrounding integers in numeric order.
 - `.planning/phases/00-pre-flight-gates/00-03-SUMMARY.md` — plan outcome + lessons
 
 ### Phase 1: Stripping path (interactive mode only)
-**Goal**: Prove the hypothesis mechanism works end-to-end **in a live interactive Claude Code session** — sub-agent reports funnel through `sagol_write_report`, get captured to disk, and are replaced in the main agent's context with a ≤200-token stripped form via `PostToolUse` + `updatedMCPToolOutput`, with zero body text leaking upstream. **Headless `claude -p` support is explicitly out of scope** per the Phase 0 architectural finding.
-**Pre-task 0 (HARD GATE)**: In this very Claude Code session (or a comparable interactive session), call `mcp__sagol__write_report` via the Skill/Task tool and verify that (a) the tool fires, (b) a report file appears under `.sagol/reports/`, AND (c) the tool_response the parent agent sees is the `[report:<id>] <title>\n<summary>` stripped form, not the full body. If this pre-task fails, the entire project is architecturally dead and kill becomes the only remaining option — escalate to user immediately.
+**Goal**: Prove the SAGOL stripping mechanism works end-to-end **in a live interactive Claude Code session** — sub-agent reports funnel through `mcp__sagol__write_report`, get captured to disk, and are replaced in the main agent's context with a ≤200-char stripped form (`[report:<id>] <title>\n<summary>\n\n(full body: …)`) with zero body text leaking upstream.
+
+**Architecture note (2026-04-15 HARD GATE pivot):** The Phase 1 HARD GATE pre-task fired live inside an interactive CC session and confirmed that project-local `PostToolUse` hooks do not fire in interactive mode either (not just headless). Phase 1 therefore adopts **server-side stripping** (D-10): the `handleWriteReport` handler in `src/mcp/server.ts` returns the stripped form directly, no hook involved. The hook path (`scripts/strip-report.ts`) is preserved dormant for future CC versions that fix project-local hook loading. See `.planning/phases/01-stripping-path-interactive-mode-only/01-CONTEXT.md` D-10 and `.planning/research/HEADLESS_HOOK_LIMITATION.md`.
+
+**Pre-task 0 (HARD GATE)**: ✅ FIRED AND RESOLVED 2026-04-15 via D-10 server-side pivot. Direct-import verification (`bun run scripts/verify-server-strip.ts`) is GREEN. Live CC round-trip re-verification requires a session restart and is the first task of the first Phase 1 plan.
+
 **Depends on**: Phase 0
 **Requirements**: INST-01, INST-02, CAP-01, CAP-02, CAP-03, CAP-04, CAP-05
 **Success Criteria** (what must be TRUE):
-  1. A user installs SAGOL into Claude Code with a single command and `bunx sagol doctor` shows hook registered, MCP server reachable, and Skill discoverable all green.
-  2. A sub-agent calling `sagol_write_report` produces a markdown file at `.sagol/reports/<id>.md` with frontmatter (id/title/source/timestamp/summary).
-  3. 5 concurrent sub-agents each write a report and the parent agent's conversation transcript contains **zero lines** of any report body — only `[report:<id>] <title>\n<summary>` stripped forms — verified by the automated leakage canary.
-  4. The ≤200-token summary is derived in-session from frontmatter `summary` or a naive first-paragraph extract — no `@anthropic-ai/sdk` calls anywhere in the code path.
-  5. `grep -r "caveman\|compressed\|telegraphic\|er/" .` returns **0 hits** and the caveman lift stays ≤200 LOC across `compiler.ts` + `context.ts` + slim `watcher.ts`.
+  1. A user can attach SAGOL to a Claude Code project with a minimal `bunx sagol init` one-liner and `bunx sagol doctor` shows MCP server reachable, `.mcp.json` + `enabledMcpjsonServers` wired, and verify-server-strip GREEN.
+  2. A sub-agent calling `mcp__sagol__write_report` produces a markdown file at `.sagol/reports/<id>.md` with frontmatter (id/title/source/timestamp/summary), and the tool response observed by the parent agent is the stripped form only.
+  3. 5 concurrent sub-agents each write a report and the parent agent's conversation transcript contains **zero lines** of any report body — only stripped forms — verified by a reproducible leakage-check fixture (see CONTEXT.md D-11) that parses the session transcript JSONL.
+  4. The ≤200-token summary is derived in-session from frontmatter `summary` field or a naive first-paragraph extract — no `@anthropic-ai/sdk` calls anywhere in the code path.
+  5. The live CC round-trip HARD GATE re-verification is logged in `.planning/phases/01-stripping-path-interactive-mode-only/01-LIVE-HARDGATE.md` with timestamp, CC version, and the observed stripped tool response (canary-free). Caveman lift is **out of scope for Phase 1** and deferred to Phase 2 per CONTEXT.md D-12.
 **Plans**: TBD
 
 ### Phase 2: Dashboard + bidirectional feedback
