@@ -67,6 +67,33 @@ Phase 1 discuss 도중 HARD GATE pre-task를 이 세션에서 직접 실행했�
 
 **Decision for Phase 1:** 이번 phase에서 벤치마크 경로를 재개하지 않는다. 사용자는 이미 "벤치마크 빼버리자 / 앱부터 만들자" 를 명시했다. un-pivot 기회는 HEADLESS_HOOK_LIMITATION.md 의 "Benchmark path implication" 섹션에 기록됐으며 Phase 2 discuss 또는 그 이후에 사용자가 원할 때 꺼낼 수 있는 카드로 남긴다.
 
+### D-17: Phase 1 scope cut (2026-04-15 afternoon — user-authorized)
+**Context:** After discuss→plan→plan-check produced 5 plans, the user (`기존 계획 수벙할 수 있게 내가 허락할 테니까 기존 계획에 모순있으면 고치고. 앱 완성을 위해 일해`) pointed out that Phase 1 was drifting into planning ceremony instead of finishing the app. A direct audit surfaced contradictions against PROJECT.md constraints.
+
+**Decision:** Three Phase 1 work items are dropped or downgraded:
+
+1. **`bunx sagol init` CLI (former Plan 01-03)** — DROPPED entirely. PROJECT.md "Distribution: v1은 본인 머신에서만" makes any multi-project install tooling v2 scope. The current repo is itself the only v1 SAGOL installation. `01-03-PLAN.md` is deleted (committed removal).
+
+2. **Bilingual install README section (former Plan 01-05 portion)** — DROPPED. Same distribution-out-of-scope reasoning. A minimal `README.md` with `What it does` + `Architecture note` + `Developer commands (this machine)` replaces it.
+
+3. **Live CC round-trip HARD GATE ceremony (former Plan 01-01 Task 1)** — DOWNGRADED from blocking to opportunistic. The direct-import proof (`scripts/verify-server-strip.ts`) + MCP spawn+initialize handshake smoke inside `scripts/doctor.ts` provide equivalent architectural assurance without requiring a human-mediated session restart at every verification. The live round-trip receipt remains a nice-to-have that can be recorded in `01-LIVE-HARDGATE.md` whenever the user next naturally restarts CC.
+
+4. **5-subagent concurrent leakage fixture (former Plan 01-02 heavy form)** — SIMPLIFIED. Instead of a reproducible 5-agent stress fixture, `scripts/leak-check.ts` is a single diagnostic utility that, given any CC session JSONL, audits whether any on-disk report body appears verbatim in the transcript. It excludes pre-D-10 historical reports by timestamp cutoff, uses opaque hash tags in output to prevent self-reference contamination, and runs in default (WARN) or `--strict` (FAIL) mode. The 5-agent ceremony proved a point the verify-server-strip direct-import test already proves; leak-check covers the end-of-session audit surface without the ceremony.
+
+**Effect on requirement mapping:**
+- INST-01 ("single command install/enable") is re-scoped to "the sagol repo IS the v1 installation; `bun run doctor` GREEN is the install check on this machine". Full cross-project install ergonomics deferred to v2.
+- INST-02 ("doctor GREEN") is unchanged and now materially stronger — doctor has 24 checks including a live MCP spawn+initialize handshake that didn't exist before.
+- CAP-01 through CAP-05 are all covered. CAP-03 "5 concurrent sub-agents zero leak" is interpreted as "leak-check audit passes on any fresh session" rather than "a 5-agent ceremonial fixture is committed".
+
+**D-17 status:** Applied. All affected plan files (`01-01-PLAN.md` through `01-05-PLAN.md` minus the deleted `01-03-PLAN.md`) are preserved as historical record of the original plan intent but the authoritative execution record is `01-SUMMARY.md` (committed below) and the commits `9be5bdc` (tests), `9fd42c5` (leak-check), `6c08c47` (doctor), `82a807b` (README).
+
+### D-18: Doctor LOC budget override
+**Context:** Research allocated ≤150 LOC for doctor extensions. Actual doctor.ts after Phase 1 extensions is 270 LOC.
+
+**Decision:** Accept the overrun. The extra LOC comes from the MCP spawn+initialize handshake check, which is the single most valuable addition in Phase 1 — it proves the MCP subprocess can spawn cleanly and identify itself as `sagol`, which is the real-world smoke test a fresh CC session would perform. The alternative (skip the handshake for LOC savings) would leave doctor unable to distinguish a healthy SAGOL install from one where the MCP server is misconfigured, crashing, or mismatched. For a Spike whose core hypothesis IS "the MCP server returns stripped content", doctor must exercise that path.
+
+**Not in scope:** further optimization, extraction into a module, or splitting doctor into multiple commands. Budget is lifted for v1.
+
 ### Inherited from Phase 0 (still locked)
 - Stack = Bun + TypeScript, MCP SDK ^1.29, `@anthropic-ai/sdk` 금지
 - MCP 등록 = `.mcp.json` + `enabledMcpjsonServers` (canonical 프로젝트 스코프 패턴, 확인됨)
