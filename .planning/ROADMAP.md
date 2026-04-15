@@ -2,28 +2,30 @@
 
 ## Overview
 
-SAGOL is a hypothesis-validation rig disguised as a tool. The roadmap is organized as four risk-driven phases that walk a straight line from "can we even fire the kill-switch?" (Phase 0) through "does the hypothesis mechanism work at all?" (Phase 1), "can a human inspect and steer it?" (Phase 2), to "did SWE-bench Pro say continue or kill?" (Phase 3). Every phase is gated: if its exit criterion fails, downstream phases are waste. Phase 0 is deliberately unmerged from Phase 1 because its entire purpose is to let the project die on Day 1 if the mechanism or the benchmark is already broken — without the leakage canary and noise-sensitivity gate, the kill-switch in Phase 3 is silently inoperable.
+SAGOL v1 is an **app-first build**. The original kill-switch-first framing (Phase 0 → automated SWE-bench Pro harness → Day-1 verdict) died on 2026-04-15 when Phase 0 surfaced an architectural blocker: `claude -p` headless mode does not load project-local `PostToolUse` hooks on Claude Code 2.1.108 (see `.planning/research/HEADLESS_HOOK_LIMITATION.md`). Rather than kill the project, we pivoted: build the working tool first (Phase 1 stripping mechanism in interactive mode, Phase 2 dashboard + bidirectional feedback), then decide whether the hypothesis holds using a **manual benchmark session** — small-N interactive runs where a human compares baseline vs SAGOL transcripts (and optionally hand-edits a baseline transcript to simulate stripping) — to be scheduled immediately after Phase 2 exits. No third code phase is planned; the benchmark is a methodology applied to the finished tool, not a new milestone.
+
+The preserved research in `.planning/research/` (STACK, ARCHITECTURE, KILL_SWITCH, PITFALLS, HEADLESS_HOOK_LIMITATION, SUMMARY, FEATURES, PINNED_VERSIONS) stays intact and informs both the app build and the post-Phase-2 benchmark methodology.
 
 ## Phases
 
 **Phase Numbering:**
-- Integer phases (0, 1, 2, 3): Planned milestone work
+- Integer phases (0, 1, 2): Planned milestone work
 - Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [x] **Phase 0: Pre-flight gates** - Closed with caveat on 2003-04-15 (canary RED in headless mode, kill-switch overridden by user pivot)
+- [x] **Phase 0: Pre-flight gates** - Closed with caveat on 2026-04-15 (canary RED in headless mode, kill-switch overridden by user pivot)
 - [ ] **Phase 1: Stripping path** - Prove report bodies never reach the main agent's context **(interactive mode only)**
-- [ ] **Phase 2: Dashboard + bidirectional feedback** - Human inspection surface + caveman lift finalized
+- [ ] **Phase 2: Dashboard + bidirectional feedback** - Human inspection surface + caveman lift finalized; post-exit: manual benchmark session
 
 ## Phase Details
 
-### Phase 0: Pre-flight gates — CLOSED WITH CAVEAT (2003-04-15)
+### Phase 0: Pre-flight gates — CLOSED WITH CAVEAT (2026-04-15)
 **Goal (original)**: Prove on Day 1 that the stripping mechanism is architecturally viable AND the chosen benchmark is sensitive to context noise — otherwise kill or switch benchmark before any real build work.
 **Outcome**: The Day-1 leakage canary fired RED on all three rescue attempts. Root cause identified: **`claude -p` headless mode does not load project-local `PostToolUse` hooks** on Claude Code 2.1.108 (see `.planning/research/HEADLESS_HOOK_LIMITATION.md`). Per KILL_SWITCH.md strict reading, this would end v1. User explicitly **overrode the Day-1 kill ceremony** ("벤치는 다른방법으로 할테니 앱부터 완성해보자") and elected to:
   - Close Phase 0 with a documented limitation instead of killing the project.
   - Narrow Phase 1 to **interactive mode only**.
-  - Defer Phase 3 entirely — the SWE-bench Pro harness is abandoned; a new benchmark method will be proposed after Phases 1 and 2 complete.
+  - Remove Phase 3 from v1 entirely — the automated SWE-bench Pro harness is abandoned. Benchmarking becomes a **manual session** run after Phase 2 exits: small-N interactive comparisons of baseline vs SAGOL transcripts (optionally with hand-edited transcripts simulating stripping). Methodology reuses the preserved research in `.planning/research/` (STACK, PITFALLS, ARCHITECTURE, etc.) but produces no new code phase.
 **Depends on**: Nothing (first phase)
 **Requirements**: GATE-01 ✓ (committed, not chmod-locked), GATE-02 ✗ (failed, override), GATE-03 ✓ (dry-run green in 00-02), GATE-04 ✓ (committed, not chmod-locked), GATE-05 ✗ (superseded by override)
 **Plans**: 3 plans
@@ -57,6 +59,18 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. A user submitting approve/reject/revise from the dashboard causes the agent's in-flight `sagol_await_feedback` call to resolve with that feedback as the tool result, within one round trip; a 10-minute timeout falls back to `"(no feedback — proceed)"`; duplicate submits dedupe by action_id; tab re-focus re-syncs from server-authoritative state.
   3. An off-host `curl` to the dashboard port is rejected (bound to `127.0.0.1` + URL token check) — confirmed by a negative test.
   4. The end-to-end smoke runs: sub-agent writes report → dashboard shows it → user submits feedback → agent consumes feedback → task continues, all in one session.
-  5. Eval/benchmark mode automatically bypasses `sagol_await_feedback` (immediate `"(no feedback — proceed)"`) and the eval runner never imports any dashboard module — verified at the code-path level.
+  5. A benchmark-mode toggle (env var or CLI flag) bypasses `sagol_await_feedback` with an immediate `"(no feedback — proceed)"` so that the post-Phase-2 manual benchmark session can run interactive baseline/SAGOL transcripts without human-in-the-loop stalls. No automated eval runner code ships in v1.
 **Plans**: TBD
 **UI hint**: yes
+
+## Progress
+
+**Execution Order:**
+Phases execute in numeric order: 0 → 1 → 2. Manual benchmark session runs post-Phase 2 as a methodology exercise, not a new phase.
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 0. Pre-flight gates | 3/3 | **Closed with caveat** (canary RED, kill overridden by user pivot) | 2026-04-15 |
+| 1. Stripping path (interactive) | 0/TBD | Not started | - |
+| 2. Dashboard + feedback | 0/TBD | Not started | - |
+| Post-v1: Manual benchmark session | — | **Scheduled after Phase 2 exit** (methodology only, no code phase) | - |
