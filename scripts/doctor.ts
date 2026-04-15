@@ -26,13 +26,21 @@ const REQUIRED_FILES = [
   ".claude/settings.json",
   ".mcp.json",
   "src/mcp/server.ts",
+  "src/dash/server.ts",
+  "src/dash/compiler.ts",
+  "src/dash/context.ts",
+  "src/dash/watcher.ts",
+  "src/dash/html.ts",
   "scripts/strip-report.ts",
   "scripts/verify-server-strip.ts",
+  "scripts/verify-dash-e2e.ts",
   "scripts/leak-check.ts",
   "scripts/canary.ts",
   "scripts/noise-gate.ts",
   "scripts/pinned-hash.ts",
+  "scripts/dash.ts",
   "tests/mcp-server.test.ts",
+  "tests/dash.test.ts",
   ".planning/research/KILL_SWITCH.md",
   ".planning/research/PINNED_VERSIONS.md",
   ".planning/research/HEADLESS_HOOK_LIMITATION.md",
@@ -239,6 +247,27 @@ async function main(): Promise<number> {
       detail: `threw: ${String(e)}`,
     });
   }
+
+  // Check: dashboard URL file (informational — not a failure if absent)
+  check("dashboard", () => {
+    const urlFile = join(PROJECT_ROOT, ".sagol", "dashboard-url.txt");
+    if (!existsSync(urlFile)) {
+      return { ok: true, detail: "not running (no .sagol/dashboard-url.txt — informational)" };
+    }
+    try {
+      const raw = readFileSync(urlFile, "utf8").trim();
+      const u = new URL(raw);
+      if (u.hostname !== "127.0.0.1") {
+        return { ok: false, detail: `URL hostname ${u.hostname} is not 127.0.0.1` };
+      }
+      if (!u.searchParams.get("t")) {
+        return { ok: false, detail: "URL has no ?t= token query" };
+      }
+      return { ok: true, detail: `running at ${u.host} (token length ${u.searchParams.get("t")!.length})` };
+    } catch (e) {
+      return { ok: false, detail: `bad URL file: ${String(e)}` };
+    }
+  });
 
   // Check: .sagol/reports directory is writable
   check(".sagol/reports writable", () => {
