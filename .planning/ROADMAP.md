@@ -52,12 +52,16 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. 5 concurrent sub-agents each write a report and the parent agent's conversation transcript contains **zero lines** of any report body — only stripped forms — verified by a reproducible leakage-check fixture (see CONTEXT.md D-11) that parses the session transcript JSONL.
   4. The ≤200-token summary is derived in-session from frontmatter `summary` field or a naive first-paragraph extract — no `@anthropic-ai/sdk` calls anywhere in the code path.
   5. The live CC round-trip HARD GATE re-verification is logged in `.planning/phases/01-stripping-path-interactive-mode-only/01-LIVE-HARDGATE.md` with timestamp, CC version, and the observed stripped tool response (canary-free). Caveman lift is **out of scope for Phase 1** and deferred to Phase 2 per CONTEXT.md D-12.
-**Plans**: 5 plans
-- [ ] 01-01-PLAN.md — Live HARD GATE re-verification + bun test unit suite for buildStripped/deriveSummary/handleWriteReport
-- [ ] 01-02-PLAN.md — 5-subagent leakage-check fixture (prep + transcript-grep script + reproducible record)
-- [ ] 01-03-PLAN.md — bunx sagol init (merge-preserve .mcp.json + .claude/settings.json, bin dispatch)
-- [ ] 01-04-PLAN.md — Extended doctor (verify-strip + .mcp.json + settings.json + MCP initialize + reports writable)
-- [ ] 01-05-PLAN.md — README install paragraph + 01-EXIT-GATE-RESULT.md consolidation
+**Plans**: 4 plans (originally 5; `01-03` dropped per D-17 as v2-scope distribution work). Execution was consolidated via the D-17 scope cut and executed directly — the authoritative execution record is `01-SUMMARY.md` (commit `2b3f171`), not per-plan `*-SUMMARY.md` files.
+- [x] 01-01 — `deriveSummary` exported + `bun test` unit suite (11 tests GREEN) — commit `9be5bdc`. Live HARD GATE human ceremony downgraded to opportunistic per D-17.
+- [x] 01-02 — `scripts/leak-check.ts` end-of-session transcript audit (replaces the 5-subagent concurrent fixture ceremony per D-17) — commit `9fd42c5`
+- [~] 01-03 — DROPPED (bunx sagol init CLI is v2 distribution scope per D-17)
+- [x] 01-04 — Extended `scripts/doctor.ts` (24 checks incl. MCP spawn+initialize handshake smoke) — commit `6c08c47`
+- [x] 01-05 — `README.md` with D-10 architecture note + dev commands (install guide omitted per D-17) — commit `82a807b`
+**Exit artifacts:**
+- `.planning/phases/01-stripping-path-interactive-mode-only/01-SUMMARY.md` — Phase 1 execution record + requirement coverage table
+- `.planning/phases/01-stripping-path-interactive-mode-only/01-CONTEXT.md` — D-10 through D-18 (D-17/D-18 added after scope cut)
+- `src/mcp/server.ts`, `tests/mcp-server.test.ts`, `scripts/verify-server-strip.ts`, `scripts/leak-check.ts`, `scripts/doctor.ts` (extended), `README.md`
 
 ### Phase 2: Dashboard + bidirectional feedback
 **Goal**: A human can open a local browser dashboard, watch reports stream in live, click through them with nice markdown rendering, and submit approve/reject/revise feedback that the blocked agent consumes as the result of `sagol_await_feedback` — all without a single eval-mode run ever touching the dashboard code path.
@@ -80,6 +84,6 @@ Phases execute in numeric order: 0 → 1 → 2. Manual benchmark session runs po
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 0. Pre-flight gates | 3/3 | **Closed with caveat** (canary RED, kill overridden by user pivot) | 2026-04-15 |
-| 1. Stripping path (interactive) | 0/5 | Planned | - |
+| 1. Stripping path (interactive) | 4/4 + 1 dropped | **Complete** (server-side stripping live, doctor GREEN, 11 unit tests, leak-check) | 2026-04-15 |
 | 2. Dashboard + feedback | 0/TBD | Not started | - |
 | Post-v1: Manual benchmark session | — | **Scheduled after Phase 2 exit** (methodology only, no code phase) | - |
