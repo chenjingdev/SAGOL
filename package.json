@@ -11,7 +11,8 @@
     "canary": "bun run scripts/canary.ts",
     "noise-gate": "bun run scripts/noise-gate.ts",
     "mcp": "bun run src/mcp/server.ts",
-    "doctor": "bun run scripts/doctor.ts"
+    "doctor": "bun run scripts/doctor.ts",
+    "test": "bun test"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",

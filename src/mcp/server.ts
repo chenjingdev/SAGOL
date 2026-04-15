@@ -45,7 +45,7 @@ function generateId(): string {
   return `${ts}-${rand}`;
 }
 
-function deriveSummary(body: string): string {
+export function deriveSummary(body: string): string {
   // Naive: first non-empty paragraph, capped at 200 chars.
   const paragraphs = body.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
   const first = paragraphs[0] ?? body.trim();
