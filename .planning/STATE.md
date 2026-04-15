@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Phase 01 complete (server-side stripping live + doctor GREEN + 11 unit tests + leak-check); Phase 02 awaiting discuss
-stopped_at: Phase 01 COMPLETE — 01-SUMMARY.md committed at 2b3f171; ready for `/gsd-discuss-phase 2` (dashboard + bidirectional feedback)
-last_updated: "2026-04-15T01:30:00.000Z"
-last_activity: 2026-04-15 -- Phase 01 completed via D-17 scope-cut + direct execution (bypassing full execute-phase orchestration per user directive 앱 완성을 위해 일해)
+status: Phase 02 complete (dashboard + await_feedback round-trip GREEN, 20 unit tests, 3-scenario e2e); v1 app code-complete, manual benchmark session pending
+stopped_at: Phase 02 COMPLETE — 02-SUMMARY.md committed; v1 app is code-complete. Next step is the post-Phase 2 manual benchmark session.
+last_updated: "2026-04-15T02:00:00.000Z"
+last_activity: 2026-04-15 -- Phase 02 completed via D-28 direct execution (no gsd-plan-phase orchestration per user directive 오토 ㄱㄱ)
 progress:
   total_phases: 3
-  completed_phases: 2
-  total_plans: 7
-  completed_plans: 7
-  percent: 67
+  completed_phases: 3
+  total_plans: 9
+  completed_plans: 9
+  percent: 100
 ---
 
 # Project State
@@ -24,16 +24,16 @@ See: .planning/PROJECT.md (updated 2026-04-15)
 
 **Current value (2026-04-15 pivot):** Phase 0 Day-1 canary revealed that `claude -p` headless mode does not load project-local `PostToolUse` hooks (see `.planning/research/HEADLESS_HOOK_LIMITATION.md`). The strict SWE-bench Pro measurement path is therefore not viable on Claude Code 2.1.108. User elected to **override the KILL_SWITCH.md strict Day-1 kill** and proceed with app-first development: complete Phase 1 (stripping mechanism, interactive-mode only) and Phase 2 (browser dashboard + bidirectional feedback). Phase 3 was removed from v1 entirely. Benchmarking becomes a **manual session** run immediately after Phase 2 exits — small-N interactive comparisons of baseline vs SAGOL transcripts, optionally with hand-edited transcripts simulating stripping. No automated eval runner code ships in v1.
 
-**Current focus:** Phase 02 — Dashboard + bidirectional feedback (awaiting discuss)
+**Current focus:** v1 app code-complete. Next non-code step is the manual benchmark session (methodology documented in 02-SUMMARY.md).
 
 ## Current Position
 
-Phase: 01 COMPLETE → entering Phase 02
-Plan: 0 of TBD (Phase 02)
-Status: Phase 01 shipped server-side stripping + doctor + 11 unit tests + leak-check + README. 01-SUMMARY committed (2b3f171). `/gsd-discuss-phase 2` is the next command.
-Last activity: 2026-04-15 -- Phase 01 done via D-17 scope cut
+Phase: 02 COMPLETE → v1 app code-complete (3/3 coding phases done; manual benchmark session is methodology, not a phase)
+Plan: —
+Status: v1 ships interactive-mode stripping + browser dashboard + bidirectional feedback. All automated checks GREEN. `02-SUMMARY.md` is the authoritative Phase 2 execution record.
+Last activity: 2026-04-15 -- Phase 02 done via D-28 direct execution (오토 ㄱㄱ mode)
 
-Progress: [█████████░] 67%
+Progress: [██████████] 100% (coding)
 
 ## Performance Metrics
 

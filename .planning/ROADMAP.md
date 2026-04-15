@@ -73,8 +73,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. An off-host `curl` to the dashboard port is rejected (bound to `127.0.0.1` + URL token check) — confirmed by a negative test.
   4. The end-to-end smoke runs: sub-agent writes report → dashboard shows it → user submits feedback → agent consumes feedback → task continues, all in one session.
   5. A benchmark-mode toggle (env var or CLI flag) bypasses `sagol_await_feedback` with an immediate `"(no feedback — proceed)"` so that the post-Phase-2 manual benchmark session can run interactive baseline/SAGOL transcripts without human-in-the-loop stalls. No automated eval runner code ships in v1.
-**Plans**: TBD
-**UI hint**: yes
+**Plans**: Phase 2 was executed via the D-28 direct-execution mode (no per-plan files). Authoritative execution record is `02-SUMMARY.md`. See also `02-CONTEXT.md` for the D-20 through D-28 design decisions.
+**Exit artifacts:**
+- `.planning/phases/02-dashboard-bidirectional-feedback/02-SUMMARY.md` — execution record + requirement coverage table (DASH-01..05, FB-01..05)
+- `.planning/phases/02-dashboard-bidirectional-feedback/02-CONTEXT.md` — D-20 through D-28
+- `src/dash/` (compiler.ts, context.ts, watcher.ts, server.ts, html.ts), `src/mcp/server.ts` (+ `await_feedback` tool), `scripts/dash.ts`, `scripts/verify-dash-e2e.ts`, `tests/dash.test.ts`, `scripts/doctor.ts` (extended)
+**UI hint**: yes (dashboard shipped via Preact + HTM + import map, no build step per STACK.md + D-27)
 
 ## Progress
 
@@ -85,5 +89,5 @@ Phases execute in numeric order: 0 → 1 → 2. Manual benchmark session runs po
 |-------|----------------|--------|-----------|
 | 0. Pre-flight gates | 3/3 | **Closed with caveat** (canary RED, kill overridden by user pivot) | 2026-04-15 |
 | 1. Stripping path (interactive) | 4/4 + 1 dropped | **Complete** (server-side stripping live, doctor GREEN, 11 unit tests, leak-check) | 2026-04-15 |
-| 2. Dashboard + feedback | 0/TBD | Not started | - |
+| 2. Dashboard + feedback | direct-execution (D-28) | **Complete** (Bun.serve dashboard + WebSocket push + await_feedback round-trip + benchmark-mode bypass; 20 unit tests, 3-scenario e2e) | 2026-04-15 |
 | Post-v1: Manual benchmark session | — | **Scheduled after Phase 2 exit** (methodology only, no code phase) | - |
