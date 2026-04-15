@@ -12,6 +12,16 @@
           }
         ]
       }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun run /Users/laonpeople/dev/sagol/scripts/stop-strip.ts"
+          }
+        ]
+      }
     ]
   }
 }

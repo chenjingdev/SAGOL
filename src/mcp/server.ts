@@ -102,7 +102,7 @@ export async function handleWriteReport(input: {
   title: string;
   body: string;
   source?: string;
-}): Promise<{ content: Array<{ type: "text"; text: string }> }> {
+}): Promise<string> {
   mkdirSync(REPORTS_DIR, { recursive: true });
   const id = generateId();
   const timestamp = new Date().toISOString();
@@ -118,15 +118,7 @@ export async function handleWriteReport(input: {
   });
   const path = join(REPORTS_DIR, `${id}.md`);
   await Bun.write(path, md);
-  const stripped = buildStripped({ id, title: input.title, summary });
-  return {
-    content: [
-      {
-        type: "text" as const,
-        text: stripped,
-      },
-    ],
-  };
+  return buildStripped({ id, title: input.title, summary });
 }
 
 // ---------------------------------------------------------------------------
@@ -264,7 +256,10 @@ async function main() {
           .describe("Origin tag: subagent name, task id, etc."),
       },
     },
-    async (args) => handleWriteReport(args),
+    async (args) => {
+      const text = await handleWriteReport(args);
+      return { content: [{ type: "text" as const, text }] };
+    },
   );
 
   server.registerTool(
