@@ -30,7 +30,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync, existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { randomBytes } from "node:crypto";
 
@@ -129,13 +129,123 @@ export async function handleWriteReport(input: {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Phase 2 — await_feedback tool (blocking, with dashboard long-poll IPC).
+//
+// Flow:
+//   1. Check SAGOL_BENCHMARK_MODE env var → immediate fallback if set (D-23).
+//   2. Read .sagol/dashboard-url.txt to discover the running dashboard (D-21).
+//      If absent/unreadable → fallback.
+//   3. POST /api/await with {actionId, reportId, prompt?} + X-Sagol-Token.
+//   4. GET /api/poll/<actionId> (long-poll) and unwrap the feedback.
+//      On 408 / 404 / fetch error → fallback.
+//   5. Return feedback.kind [+ "\n" + feedback.text] as the MCP tool result.
+//
+// Fallback string (FB-03): "(no feedback — proceed)"
+// ---------------------------------------------------------------------------
+const FALLBACK_FEEDBACK = "(no feedback — proceed)";
+const DASHBOARD_URL_FILE = join(PROJECT_ROOT, ".sagol", "dashboard-url.txt");
+
+function parseDashboardUrlFile(): { base: string; token: string } | null {
+  if (!existsSync(DASHBOARD_URL_FILE)) return null;
+  try {
+    const raw = readFileSync(DASHBOARD_URL_FILE, "utf8").trim();
+    if (!raw) return null;
+    const u = new URL(raw);
+    const token = u.searchParams.get("t");
+    if (!token) return null;
+    return { base: `${u.protocol}//${u.host}`, token };
+  } catch {
+    return null;
+  }
+}
+
+function formatFeedback(f: {
+  kind: "approve" | "reject" | "revise";
+  text?: string;
+}): string {
+  if (f.kind === "approve") return "approve";
+  if (f.kind === "reject") return "reject" + (f.text ? `\n${f.text}` : "");
+  return "revise" + (f.text ? `\n${f.text}` : "");
+}
+
+export async function handleAwaitFeedback(input: {
+  reportId: string;
+  prompt?: string;
+}): Promise<{ content: Array<{ type: "text"; text: string }> }> {
+  // D-23: benchmark mode bypass — do NOT touch filesystem or network.
+  if (process.env.SAGOL_BENCHMARK_MODE) {
+    return { content: [{ type: "text" as const, text: FALLBACK_FEEDBACK }] };
+  }
+
+  const dash = parseDashboardUrlFile();
+  if (!dash) {
+    return {
+      content: [
+        {
+          type: "text" as const,
+          text: "(no feedback — dashboard not running, proceed)",
+        },
+      ],
+    };
+  }
+
+  const actionId = `${Date.now()}-${randomBytes(4).toString("hex")}`;
+  const headers = {
+    "content-type": "application/json",
+    "X-Sagol-Token": dash.token,
+  };
+
+  try {
+    const reg = await fetch(`${dash.base}/api/await`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        actionId,
+        reportId: input.reportId,
+        prompt: input.prompt,
+      }),
+    });
+    if (!reg.ok) {
+      return {
+        content: [{ type: "text" as const, text: FALLBACK_FEEDBACK }],
+      };
+    }
+
+    const poll = await fetch(
+      `${dash.base}/api/poll/${encodeURIComponent(actionId)}`,
+      { method: "GET", headers },
+    );
+    if (poll.status === 408 || !poll.ok) {
+      return {
+        content: [{ type: "text" as const, text: FALLBACK_FEEDBACK }],
+      };
+    }
+    const body = (await poll.json()) as {
+      feedback?: { kind: "approve" | "reject" | "revise"; text?: string };
+    };
+    if (!body?.feedback) {
+      return {
+        content: [{ type: "text" as const, text: FALLBACK_FEEDBACK }],
+      };
+    }
+    return {
+      content: [
+        { type: "text" as const, text: formatFeedback(body.feedback) },
+      ],
+    };
+  } catch {
+    return { content: [{ type: "text" as const, text: FALLBACK_FEEDBACK }] };
+  }
+}
+
 async function main() {
   const server = new McpServer(
     { name: "sagol", version: "0.0.0-phase0" },
     {
       capabilities: { tools: {} },
       instructions:
-        "SAGOL: call write_report to persist a sub-agent report. The tool response is ALWAYS a stripped form ([report:<id>] <title>\\n<summary> + file path) — the full body is written to .sagol/reports/<id>.md on disk. Read that file only if the summary is not enough.",
+        "SAGOL: (1) write_report persists sub-agent reports; tool response is the stripped form only, full body on disk at .sagol/reports/<id>.md. (2) await_feedback blocks until a human submits approve/reject/revise feedback via the SAGOL dashboard; falls back to '(no feedback — proceed)' if the dashboard isn't running, timeout, or benchmark mode.",
     },
   );
 
@@ -144,7 +254,7 @@ async function main() {
     {
       title: "SAGOL: write report",
       description:
-        "Write a sub-agent report as a markdown file under .sagol/reports/. Returns the full body; the PostToolUse hook strips it to a summary before the main agent sees it.",
+        "Write a sub-agent report as a markdown file under .sagol/reports/. Returns a ≤200-char stripped form ([report:<id>] <title>\\n<summary> + file path). The full body is persisted to .sagol/reports/<id>.md on disk only.",
       inputSchema: {
         title: z.string().min(1).describe("Short title for the report"),
         body: z.string().min(1).describe("Full markdown body of the report"),
@@ -155,6 +265,30 @@ async function main() {
       },
     },
     async (args) => handleWriteReport(args),
+  );
+
+  server.registerTool(
+    "await_feedback",
+    {
+      title: "SAGOL: wait for human feedback",
+      description:
+        "Pause and wait for human feedback on a previously written report via the SAGOL dashboard. Returns one of: 'approve', 'reject\\n<text>', 'revise\\n<text>', or a fallback '(no feedback — proceed)' string if the dashboard is not running, the user did not respond within 10 minutes, or benchmark mode is active. This tool blocks until one of those outcomes.",
+      inputSchema: {
+        reportId: z
+          .string()
+          .min(1)
+          .describe(
+            "The id of a report previously written via write_report (e.g. '1776215025113-d2dbc488').",
+          ),
+        prompt: z
+          .string()
+          .optional()
+          .describe(
+            "Optional one-sentence question shown to the human alongside the report.",
+          ),
+      },
+    },
+    async (args) => handleAwaitFeedback(args),
   );
 
   const transport = new StdioServerTransport();
