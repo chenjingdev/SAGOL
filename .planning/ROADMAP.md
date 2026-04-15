@@ -12,14 +12,13 @@ SAGOL is a hypothesis-validation rig disguised as a tool. The roadmap is organiz
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [x] **Phase 0: Pre-flight gates** - Closed with caveat on 2026-04-15 (canary RED in headless mode, kill-switch overridden by user pivot)
+- [x] **Phase 0: Pre-flight gates** - Closed with caveat on 2003-04-15 (canary RED in headless mode, kill-switch overridden by user pivot)
 - [ ] **Phase 1: Stripping path** - Prove report bodies never reach the main agent's context **(interactive mode only)**
 - [ ] **Phase 2: Dashboard + bidirectional feedback** - Human inspection surface + caveman lift finalized
-- [ ] **Phase 3: Benchmark (method TBD)** - Redesigned after Phases 1 and 2 complete
 
 ## Phase Details
 
-### Phase 0: Pre-flight gates — CLOSED WITH CAVEAT (2026-04-15)
+### Phase 0: Pre-flight gates — CLOSED WITH CAVEAT (2003-04-15)
 **Goal (original)**: Prove on Day 1 that the stripping mechanism is architecturally viable AND the chosen benchmark is sensitive to context noise — otherwise kill or switch benchmark before any real build work.
 **Outcome**: The Day-1 leakage canary fired RED on all three rescue attempts. Root cause identified: **`claude -p` headless mode does not load project-local `PostToolUse` hooks** on Claude Code 2.1.108 (see `.planning/research/HEADLESS_HOOK_LIMITATION.md`). Per KILL_SWITCH.md strict reading, this would end v1. User explicitly **overrode the Day-1 kill ceremony** ("벤치는 다른방법으로 할테니 앱부터 완성해보자") and elected to:
   - Close Phase 0 with a documented limitation instead of killing the project.
@@ -61,29 +60,3 @@ Decimal phases appear between their surrounding integers in numeric order.
   5. Eval/benchmark mode automatically bypasses `sagol_await_feedback` (immediate `"(no feedback — proceed)"`) and the eval runner never imports any dashboard module — verified at the code-path level.
 **Plans**: TBD
 **UI hint**: yes
-
-### Phase 3: Benchmark (method TBD — redesigned)
-**Status**: Deferred on 2026-04-15. Original SWE-bench Pro harness abandoned because `claude -p` headless mode does not load the stripping hook (see `HEADLESS_HOOK_LIMITATION.md`). User will propose a new benchmark approach after Phase 1 and Phase 2 are complete. This section is kept as a placeholder and will be rewritten.
-**Original Goal (archived)**: Fire the kill-switch. Run baseline vs SAGOL interleaved on SWE-bench Pro through a ≤300 LOC `bunx sagol eval` harness that spawns the Python harness out-of-process, write `SPIKE-RESULTS.md` + bilingual README, and commit the one-sentence verdict on the dated kill ceremony — continue or kill.
-**Depends on**: Phase 1 (Phase 2 may run in calendar parallel with the baseline branch of Phase 3)
-**Requirements**: EVAL-01, EVAL-02, EVAL-03, EVAL-04, EVAL-05, EVAL-06, EVAL-07, DOC-01, DOC-02, DOC-03
-**Success Criteria** (what must be TRUE):
-  1. `bunx sagol eval --mode {baseline|sagol} --tasks N` runs standalone (no dashboard imports) and spawns `claude -p --bare --mcp-config <pinned>` + `python -m swebench.harness.run_evaluation` via `Bun.spawn`, writing per-task `{task_success, total_tokens, cache_creation_input_tokens, cache_read_input_tokens, wall_ms}` rows to `.sagol/eval.sqlite`.
-  2. Baseline and SAGOL conditions run interleaved on SWE-bench Pro (primary) with the same task set, same model, same day, 3 runs per condition, random seeds recorded; SWE-bench Verified is used only as a contamination-aware smoke set.
-  3. `bunx sagol eval report` produces a markdown diff showing per-task delta, variance (IQR/std), sample size, and contamination warnings — enough to support a one-sentence verdict.
-  4. The eval harness stays ≤300 LOC (hard cap) and a `grep` for dashboard imports returns 0 hits inside `src/eval/`.
-  5. On the dated kill ceremony day, exactly one of the two commits lands: (a) `SPIKE-RESULTS.md` with a one-sentence "계속" or "폐기" verdict + bilingual README stating current status, OR (b) an automatic-failure commit because a verdict could not be produced — and this commit defines the v1 milestone close.
-**Plans**: TBD
-
-## Progress
-
-**Execution Order:**
-Phases execute in numeric order: 0 → 1 → 2 → 3
-(Phase 2 and the baseline branch of Phase 3 may overlap in calendar time, but Phase 2 exit gate must land before Phase 3's SAGOL-mode runs.)
-
-| Phase | Plans Complete | Status | Completed |
-|-------|----------------|--------|-----------|
-| 0. Pre-flight gates | 3/3 | **Closed with caveat** (canary RED, kill overridden by user pivot) | 2026-04-15 |
-| 1. Stripping path (interactive) | 0/TBD | Not started | - |
-| 2. Dashboard + feedback | 0/TBD | Not started | - |
-| 3. Benchmark (method TBD) | — | **Deferred — will be redesigned after Phase 1/2** | - |
