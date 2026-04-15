@@ -52,7 +52,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. 5 concurrent sub-agents each write a report and the parent agent's conversation transcript contains **zero lines** of any report body — only stripped forms — verified by a reproducible leakage-check fixture (see CONTEXT.md D-11) that parses the session transcript JSONL.
   4. The ≤200-token summary is derived in-session from frontmatter `summary` field or a naive first-paragraph extract — no `@anthropic-ai/sdk` calls anywhere in the code path.
   5. The live CC round-trip HARD GATE re-verification is logged in `.planning/phases/01-stripping-path-interactive-mode-only/01-LIVE-HARDGATE.md` with timestamp, CC version, and the observed stripped tool response (canary-free). Caveman lift is **out of scope for Phase 1** and deferred to Phase 2 per CONTEXT.md D-12.
-**Plans**: TBD
+**Plans**: 5 plans
+- [ ] 01-01-PLAN.md — Live HARD GATE re-verification + bun test unit suite for buildStripped/deriveSummary/handleWriteReport
+- [ ] 01-02-PLAN.md — 5-subagent leakage-check fixture (prep + transcript-grep script + reproducible record)
+- [ ] 01-03-PLAN.md — bunx sagol init (merge-preserve .mcp.json + .claude/settings.json, bin dispatch)
+- [ ] 01-04-PLAN.md — Extended doctor (verify-strip + .mcp.json + settings.json + MCP initialize + reports writable)
+- [ ] 01-05-PLAN.md — README install paragraph + 01-EXIT-GATE-RESULT.md consolidation
 
 ### Phase 2: Dashboard + bidirectional feedback
 **Goal**: A human can open a local browser dashboard, watch reports stream in live, click through them with nice markdown rendering, and submit approve/reject/revise feedback that the blocked agent consumes as the result of `sagol_await_feedback` — all without a single eval-mode run ever touching the dashboard code path.
@@ -75,6 +80,6 @@ Phases execute in numeric order: 0 → 1 → 2. Manual benchmark session runs po
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 0. Pre-flight gates | 3/3 | **Closed with caveat** (canary RED, kill overridden by user pivot) | 2026-04-15 |
-| 1. Stripping path (interactive) | 0/TBD | Not started | - |
+| 1. Stripping path (interactive) | 0/5 | Planned | - |
 | 2. Dashboard + feedback | 0/TBD | Not started | - |
 | Post-v1: Manual benchmark session | — | **Scheduled after Phase 2 exit** (methodology only, no code phase) | - |
