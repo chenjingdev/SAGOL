@@ -1,9 +1,23 @@
-# Headless Hook Limitation — Architectural Finding
+# Hook Loading Limitation — Architectural Finding
 
-**Discovered:** 2026-04-15 (Phase 0 Day 1 canary fire)
+**Discovered:** 2026-04-15 (Phase 0 Day 1 canary fire, then Phase 1 HARD GATE pre-task)
 **Claude Code version:** 2.1.108
 **Bun version:** 1.3.11
-**Status:** Known limitation, deferred. Supersedes original kill-switch strict reading.
+**Status:** Known limitation, worked around by server-side stripping (see "Server-side workaround" below).
+
+> **Update 2026-04-15 (Phase 1 HARD GATE):** The original framing of this
+> document was "headless-only" because Phase 0 never tested interactive
+> mode. Phase 1 HARD GATE pre-task then fired `mcp__sagol__write_report`
+> live inside an interactive Claude Code session and observed that the
+> project-local `PostToolUse` hook **also fails to fire in interactive
+> mode**. The limitation is therefore broader than originally documented
+> — project-local hooks at `.claude/settings.json` do not load in this
+> Claude Code version **at all** (neither interactive nor headless) while
+> respecting the D-08 rule of not touching `~/.claude/settings.json`.
+> SAGOL v1 works around this by moving the strip logic inside the MCP
+> server process itself (see "Server-side workaround"). The hook path
+> (`scripts/strip-report.ts`) is preserved as a reference for the day a
+> future CC version fixes project-local hook loading.
 
 ## TL;DR
 
@@ -119,6 +133,56 @@ Each of these paths is tracked informally for future reference.
 - `KILL_SWITCH.md` — the original strict kill rule. Still in the repo as reference;
   the override is recorded in `STATE.md` and commit messages.
 - `PROJECT.md` — the kill ceremony text. Same status.
+
+## Server-side workaround (adopted 2026-04-15, Phase 1)
+
+Rather than require any `PostToolUse` hook, the MCP server itself
+(`src/mcp/server.ts`) now returns a stripped form directly from the
+`write_report` tool handler:
+
+    [report:<id>] <title>\n<summary>\n\n(full body: .sagol/reports/<id>.md)
+
+The full body is still persisted to the on-disk file — nothing is lost.
+The on-wire tool response is the stripped string, so the main agent
+context never sees the body regardless of hook loading behavior.
+
+Why this works in both modes: the MCP stdio subprocess is spawned
+identically by Claude Code in both `claude` (interactive) and `claude -p`
+(headless) modes. Whatever the subprocess returns from its tool handler
+is exactly what the parent agent observes. No hook involved, no
+settings file consulted.
+
+Verification: `scripts/verify-server-strip.ts` imports `handleWriteReport`
+directly, writes a random canary into the body, and asserts:
+  (a) the tool response does not contain the canary
+  (b) the on-disk file does contain the canary
+  (c) the stripped form matches the `[report:<id>] …` shape
+Run `bun run scripts/verify-server-strip.ts` to reproduce.
+
+Live re-verification (tool call through Claude Code session) requires a
+session restart to pick up the new `src/mcp/server.ts` because CC spawns
+the MCP subprocess once per session. This is tracked as the first
+verification step of Phase 1's plan.
+
+## Benchmark path implication (un-pivot opportunity)
+
+The original Phase 0 kill override was premised on the assumption that
+the stripping mechanism required a `PostToolUse` hook, which cannot fire
+in `claude -p` headless mode on CC 2.1.108. The server-side workaround
+breaks that premise — if stripping lives inside the MCP server, the
+same mechanism works in headless mode too, which means the original
+SWE-bench Pro automated measurement path is **potentially reopened**.
+
+This has not been re-verified in headless mode as of 2026-04-15 (Phase 1
+HARD GATE discovery moment). The test-plan for reopening:
+
+1. Restart Claude Code so CC picks up the new `src/mcp/server.ts`.
+2. Re-run `scripts/canary.ts` in headless mode (`claude -p --mcp-config
+   .mcp.json …`). Expectation: 0 leak hits because the stripping is now
+   server-side, not hook-side. Confirms reopening.
+3. If confirmed, the user may re-introduce a Phase 3 (or decide to keep
+   the manual session methodology from the pivot). Decision deferred to
+   the user — this document just records that the option exists again.
 
 ---
 

@@ -1,20 +1,30 @@
 #!/usr/bin/env bun
 /**
- * SAGOL Phase 0 — Minimal MCP server (stdio).
+ * SAGOL Phase 1 — MCP server (stdio) with server-side stripping.
  *
- * Exposes a single tool: `write_report` under server name `sagol`,
- * so the Claude Code hook matcher `mcp__sagol__write_report` fires.
+ * Exposes a single tool: `write_report` under server name `sagol`.
  *
  * Behavior:
  *   - Accepts { title, body, source? }
  *   - Generates id `<timestamp>-<random8hex>`
  *   - Writes `${PROJECT_ROOT}/.sagol/reports/<id>.md` with YAML frontmatter
- *   - Returns { content: [{ type: "text", text: FULL_MARKDOWN }] }
+ *     (the on-disk file contains the FULL body — this is the ground truth)
+ *   - Returns a ≤200-char stripped form to the caller:
+ *       `[report:${id}] ${title}\n${summary}\n\n(full body: .sagol/reports/${id}.md)`
  *
- * The tool RETURNS THE FULL BODY on purpose — the PostToolUse hook
- * (scripts/strip-report.ts) is what replaces it with a ≤200-token summary
- * via `updatedMCPToolOutput`. If we pre-stripped here, the leakage canary
- * could not tell the difference between "the hook works" and "we cheated".
+ * Why server-side stripping instead of a PostToolUse hook:
+ *   Phase 0 Day-1 canary (2026-04-15) established that project-local
+ *   `PostToolUse` hooks do not fire in `claude -p` headless mode on Claude
+ *   Code 2.1.108 (see .planning/research/HEADLESS_HOOK_LIMITATION.md).
+ *   Phase 1 HARD GATE pre-task (2026-04-15) then proved the same hook also
+ *   does not fire in interactive mode on the same CC version. Rather than
+ *   give up or modify global settings (D-08), SAGOL moves stripping inside
+ *   the MCP server itself — the subprocess is spawned identically in both
+ *   modes so this path works universally without any hook involvement.
+ *
+ *   scripts/strip-report.ts is preserved as a fallback / reference in case a
+ *   future CC version fixes project-local hook loading and we want to move
+ *   the strip logic back out of the server.
  */
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -75,7 +85,20 @@ function buildMarkdown(args: {
   return `${fm}\n${args.body}\n`;
 }
 
-async function handleWriteReport(input: {
+export function buildStripped(args: {
+  id: string;
+  title: string;
+  summary: string;
+}): string {
+  return (
+    `[report:${args.id}] ${args.title}\n` +
+    `${args.summary}\n\n` +
+    `(full body persisted to .sagol/reports/${args.id}.md — read that file ` +
+    `only if the summary is not enough to proceed)`
+  );
+}
+
+export async function handleWriteReport(input: {
   title: string;
   body: string;
   source?: string;
@@ -95,11 +118,12 @@ async function handleWriteReport(input: {
   });
   const path = join(REPORTS_DIR, `${id}.md`);
   await Bun.write(path, md);
+  const stripped = buildStripped({ id, title: input.title, summary });
   return {
     content: [
       {
         type: "text" as const,
-        text: md,
+        text: stripped,
       },
     ],
   };
@@ -111,7 +135,7 @@ async function main() {
     {
       capabilities: { tools: {} },
       instructions:
-        "SAGOL Phase 0: write reports via write_report. Bodies are stripped from main context by a PostToolUse hook.",
+        "SAGOL: call write_report to persist a sub-agent report. The tool response is ALWAYS a stripped form ([report:<id>] <title>\\n<summary> + file path) — the full body is written to .sagol/reports/<id>.md on disk. Read that file only if the summary is not enough.",
     },
   );
 
@@ -141,7 +165,9 @@ async function main() {
   );
 }
 
-main().catch((err) => {
-  process.stderr.write(`[sagol-mcp] fatal: ${String(err)}\n`);
-  process.exit(1);
-});
+if (import.meta.main) {
+  main().catch((err) => {
+    process.stderr.write(`[sagol-mcp] fatal: ${String(err)}\n`);
+    process.exit(1);
+  });
+}
