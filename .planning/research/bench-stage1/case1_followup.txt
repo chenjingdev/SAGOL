@@ -1,0 +1,1 @@
+OK 주제 바꾸자. timezone 설정을 변경해도 date picker 컴포넌트가 즉시 업데이트 안 되는 버그 있어. 컴포넌트는 apps/portal-web/src/components/DatePicker.tsx 에 있고 timezone context는 apps/portal-web/src/contexts/TzContext.tsx 에 있어. 원인 추정해서 fix 방향 제안해줘.

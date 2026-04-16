@@ -1,0 +1,13 @@
+{
+  "case": "case1_independent_followup",
+  "filler_source": "/Users/laonpeople/.claude/projects/-Users-laonpeople-dev-ezplanet-portal-gateway-web/652d855b-c87d-49ae-ba91-42957b485f9f.jsonl",
+  "filler_turns": 323,
+  "filler_chars": 146303,
+  "full_variant_chars": 149892,
+  "stripped_variant_chars": 146921,
+  "char_reduction": 2971,
+  "reduction_pct": 1.982093774184079,
+  "report_body_chars": 3232,
+  "stripped_report_chars": 261,
+  "followup_chars": 211
+}

@@ -1,0 +1,2 @@
+[report:arch-review-auth] EZ-PLANET Portal Auth System — Architecture Review
+(6,000-char detailed architectural review body stripped for benchmark treatment variant; covered layers Edge/Gateway/Identity/Redis, 6 vulnerabilities V-01..V-06 with P0/P1/P2 roadmap)

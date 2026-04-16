@@ -1,0 +1,22 @@
+**결론: 외부 트리거로 in-memory clear 불가능.**
+
+발견:
+- **`/clear`**: 정확히 그 동작 ("wipes conversation but keeps files") — but **slash command 만**, hook/MCP/signal 외부 트리거 경로 0
+- **Hook output schema 전체**: `additionalContext`, `decision:block`, `updatedInput`, `updatedMCPToolOutput` — 메모리 mutate 필드 **없음**
+- **Signal**: SIGUSR 핸들러 없음 (SIGCONT/HUP/INT/TERM/WINCH만)
+- **MCP `_meta`**: progress/task tracking 전용, context 조작 불가
+- **Slash command 핸들러**: React useRef (`LHH.current`) — 외부 접근 불가
+
+**Cache 보존 한계**: 메시지 배열을 비우면 그 부분 prefix 사라짐 → 무조건 cache miss. system prompt + tools 부분만 cache hit 보존 가능.
+
+**환경 변수 / 설정 레버**:
+- `DISABLE_COMPACT`, `DISABLE_AUTO_COMPACT`, `CLAUDE_CODE_MAX_CONTEXT_TOKENS` (env)
+- `autoCompactEnabled`, `autoCompactWindow`, `autoCompactThreshold` (settings.json)
+
+**SAGOL 우회로 권장순**:
+1. ⭐ **메모리 자체를 작게 유지** (`write_report` + PreToolUse `updatedInput` body strip) — 비우는 게 아니라 안 쌓이게
+2. ⭐ **Auto-compact 임계값 낮춤** (100K → 50K) — 자주 컴팩션
+3. ⭐ **대시보드 알림** ("/compact 추천") — 사용자가 직접 입력
+4. **CC subprocess 관리 + JSONL 사전 truncate + auto-resume** (실험적, 복잡)
+
+전체 분석은 `[report:1776238051313-cd8f9495]`.

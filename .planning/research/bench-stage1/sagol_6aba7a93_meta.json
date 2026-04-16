@@ -1,0 +1,16 @@
+{
+  "slug": "sagol_6aba7a93",
+  "source": "/Users/laonpeople/.claude/projects/-Users-laonpeople-dev-sagol/6aba7a93-bfea-4e18-b7a1-b8315050ccb7.jsonl",
+  "pivot_turn_N": 495,
+  "pivot_turn_followup": 496,
+  "pivot_turn_baseline": 497,
+  "report_score": 2226,
+  "report_output_tokens": 2076,
+  "report_len_chars": 1176,
+  "stripped_len_chars": 124,
+  "followup_len_chars": 75,
+  "baseline_len_chars": 1093,
+  "context_full_len_chars": 135290,
+  "context_stripped_len_chars": 134238,
+  "context_tokens_at_pivot": 158935
+}
