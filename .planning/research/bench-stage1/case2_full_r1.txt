@@ -1,0 +1,81 @@
+DatePicker가 timezone 변경에 즉시 반응 안 하는 건 십중팔구 **stale closure** 문제입니다.
+
+## 원인 추정
+
+`DatePicker.tsx`가 `TzContext`의 timezone 값을 구독하는 방식에서 두 가지 패턴 중 하나가 원인일 가능성이 높습니다:
+
+**1. useEffect 의존성 배열에 timezone 누락**
+
+```tsx
+const { timezone } = useContext(TzContext);
+
+useEffect(() => {
+  // date 초기화 로직에서 timezone 사용
+  const formatted = formatInTimeZone(value, timezone, 'yyyy-MM-dd');
+  setDisplayDate(formatted);
+}, [value]); // ← timezone이 deps에 빠져있음
+```
+
+timezone이 바뀌어도 effect가 다시 안 돌아서 이전 timezone 기준으로 표시됩니다.
+
+**2. 내부 state에 timezone-applied 값을 캐시**
+
+```tsx
+const [internalDate, setInternalDate] = useState(() => {
+  return applyTimezone(initialValue, timezone); // 초기 렌더 시점의 timezone으로 고정
+});
+```
+
+useState 초기값은 최초 1회만 평가되므로, timezone이 바뀌어도 internalDate는 갱신 안 됩니다.
+
+**3. useMemo/useCallback의 deps 누락** — 날짜 포맷/파싱 함수를 memoize하면서 timezone을 의존성에 안 넣은 경우.
+
+## Fix 방향
+
+**A. timezone을 모든 관련 deps에 추가**
+
+```tsx
+const { timezone } = useContext(TzContext);
+
+// timezone 변경 시 내부 상태 동기화
+useEffect(() => {
+  setDisplayDate(formatInTimeZone(value, timezone, 'yyyy-MM-dd'));
+}, [value, timezone]);
+
+// 포맷 함수도 timezone deps 포함
+const formatDate = useCallback((date: Date) => {
+  return formatInTimeZone(date, timezone, 'yyyy-MM-dd HH:mm');
+}, [timezone]);
+```
+
+**B. derived state로 전환 (state 제거)**
+
+내부 state 대신 렌더 시점에 직접 계산하면 timezone 변경이 자동 반영됩니다:
+
+```tsx
+const { timezone } = useContext(TzContext);
+
+// state 대신 매 렌더마다 계산
+const displayDate = useMemo(
+  () => formatInTimeZone(value, timezone, 'yyyy-MM-dd'),
+  [value, timezone]
+);
+```
+
+**C. key를 사용한 강제 리마운트 (임시 해결)**
+
+구조 변경이 어려우면 timezone을 key로 써서 컴포넌트를 리마운트시킬 수 있습니다:
+
+```tsx
+<DatePicker key={timezone} value={date} onChange={setDate} />
+```
+
+단, 이건 사용자 입력 중 timezone 변경 시 입력 상태가 날아가므로 임시방편입니다.
+
+## 권장 순서
+
+1. `DatePicker.tsx`에서 `useEffect`, `useMemo`, `useCallback`의 deps 배열을 모두 확인하고 timezone 추가
+2. `useState` 초기값으로 timezone-applied 값을 캐시하고 있으면 `useEffect`로 동기화 로직 추가
+3. 날짜 라이브러리(`date-fns-tz`, `luxon`, `dayjs` 등)의 timezone 적용 시점이 렌더 시점인지 확인 -- mount 시점에 한 번만 적용하는 코드가 있으면 반응형으로 전환
+
+실제 파일을 보면 정확한 라인을 짚을 수 있는데, 위 세 패턴 중 하나가 거의 확실합니다.

@@ -1,0 +1,73 @@
+높은 확률로 원인은 DatePicker가 timezone 값을 마운트 시점에만 읽고, 이후 TzContext 변경을 구독하지 않는 구조입니다.
+
+## 원인 추정 (3가지 가능성 순서대로)
+
+**1. 초기값 캡처 후 미갱신 (가장 유력)**
+
+DatePicker 내부에서 `useMemo`나 `useState` 초기값으로 timezone을 한 번만 읽고, 이후 context가 바뀌어도 내부 state가 업데이트되지 않는 패턴:
+
+```tsx
+// 문제 패턴
+const { timezone } = useTzContext();
+const [tz, setTz] = useState(timezone); // 마운트 시점 값만 캡처
+```
+
+혹은 `useMemo`에 timezone을 deps에 안 넣은 경우:
+
+```tsx
+const formattedDate = useMemo(() => {
+  return formatInTimeZone(date, timezone, 'yyyy-MM-dd');
+}, [date]); // timezone이 deps에 빠져있음
+```
+
+**2. 라이브러리 인스턴스 재생성 안 됨**
+
+date-fns-tz나 dayjs 같은 라이브러리로 formatter/parser 인스턴스를 한 번 만들어두고 재사용하는 경우, timezone이 바뀌어도 기존 인스턴스가 그대로 남아있음. 특히 ref에 저장했거나 모듈 스코프 변수로 둔 경우.
+
+**3. Key prop 미갱신으로 리렌더링 스킵**
+
+DatePicker를 사용하는 부모에서 `key`를 고정하거나 `React.memo`로 감싸면서 timezone을 비교 대상에서 빠뜨린 경우, props가 바뀌어도 컴포넌트가 리렌더링되지 않음.
+
+## Fix 방향
+
+**A. useEffect로 context 변경 반영 (1번 원인일 때)**
+
+```tsx
+const { timezone } = useTzContext();
+
+// 내부 state가 있다면 context 변경 시 동기화
+useEffect(() => {
+  setTz(timezone);
+  // 날짜 값도 새 timezone 기준으로 재계산
+  recalculateDisplayDate(selectedDate, timezone);
+}, [timezone]);
+```
+
+또는 내부 state를 아예 없애고 매 렌더마다 context에서 직접 읽도록 변경.
+
+**B. useMemo deps 추가 (1번 원인 변형)**
+
+```tsx
+const formattedDate = useMemo(() => {
+  return formatInTimeZone(date, timezone, 'yyyy-MM-dd');
+}, [date, timezone]); // timezone 추가
+```
+
+**C. Key 강제 리마운트 (2번 원인일 때 — 빠른 우회)**
+
+라이브러리 인스턴스 문제라면, 부모에서 timezone을 key로 쓰면 timezone 변경 시 컴포넌트가 완전히 리마운트됨:
+
+```tsx
+<DatePicker key={timezone} ... />
+```
+
+이건 우회책이고, 근본적으로는 라이브러리 인스턴스를 timezone 변경 시 재생성하도록 수정해야 함.
+
+## 확인 순서
+
+1. DatePicker.tsx 열어서 `useTzContext` 또는 `useContext(TzContext)` 호출 위치 확인
+2. 그 값이 `useState` 초기값이나 `useRef`에 캡처되는지 확인
+3. `useMemo`/`useCallback`의 deps 배열에 timezone이 빠져있는지 확인
+4. 외부 라이브러리 인스턴스가 timezone 변경 시 재생성되는지 확인
+
+파일을 직접 읽으면 정확한 원인을 잡을 수 있는데, 지금은 코드 접근 없이 추정한 거라 위 4가지를 순서대로 체크하면 됩니다. 파일 읽어볼까요?

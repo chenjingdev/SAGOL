@@ -1,0 +1,79 @@
+대화 맥락과 EZP 프로젝트 아키텍처 기반으로 추정합니다.
+
+## 원인 추정
+
+DatePicker가 timezone 변경에 반응하지 않는 가장 흔한 원인 3가지:
+
+### 1. DatePicker 내부에서 TzContext를 구독하지 않음 (가장 유력)
+
+DatePicker가 마운트 시점에 timezone을 한 번만 읽고 로컬 state에 저장하는 패턴일 가능성이 높습니다.
+
+```tsx
+// 문제 패턴
+const DatePicker = () => {
+  const { timezone } = useContext(TzContext);
+  const [date, setDate] = useState(dayjs().tz(timezone)); // 마운트 시점 1회만 적용
+
+  // timezone이 바뀌어도 date state는 갱신 안 됨
+};
+```
+
+### 2. 날짜 라이브러리 인스턴스 캐싱
+
+dayjs나 moment 같은 라이브러리를 사용할 때, timezone이 인스턴스 생성 시점에 바인딩되고 이후 변경이 반영되지 않는 경우입니다. 특히 `dayjs.tz.setDefault(tz)` 같은 글로벌 설정을 쓰면서 기존 인스턴스는 업데이트가 안 되는 패턴.
+
+### 3. useMemo/useCallback의 deps 누락
+
+DatePicker 내부 계산 로직이 `useMemo`로 감싸져 있으면서 dependency array에 timezone이 빠져 있으면 캐시된 값이 계속 반환됩니다.
+
+```tsx
+// 문제 패턴
+const formattedDate = useMemo(() => {
+  return dayjs(value).tz(timezone).format('YYYY-MM-DD');
+}, [value]); // timezone이 deps에 없음
+```
+
+## Fix 방향
+
+### A. useEffect로 timezone 변경 감지 (즉각 반영)
+
+```tsx
+const DatePicker = ({ value, onChange }) => {
+  const { timezone } = useContext(TzContext);
+  const [displayDate, setDisplayDate] = useState(() => toTz(value, timezone));
+
+  useEffect(() => {
+    // timezone 변경 시 표시 날짜를 재계산
+    setDisplayDate(toTz(value, timezone));
+  }, [timezone, value]);
+};
+```
+
+### B. 파생값은 state 대신 렌더 시점 계산
+
+state에 저장하지 말고 렌더마다 계산하면 context 변경이 자동 반영됩니다.
+
+```tsx
+const DatePicker = ({ value, onChange }) => {
+  const { timezone } = useContext(TzContext);
+  // state 없이 직접 계산 — timezone 바뀌면 리렌더 → 자동 반영
+  const displayDate = dayjs(value).tz(timezone);
+  const formatted = displayDate.format('YYYY-MM-DD HH:mm');
+};
+```
+
+### C. key prop으로 강제 리마운트 (간단하지만 무식한 방법)
+
+부모에서 DatePicker에 `key={timezone}`을 넣으면 timezone 바뀔 때 컴포넌트가 통째로 리마운트됩니다. 근본 해결은 아니지만 빠른 핫픽스로는 유효합니다.
+
+```tsx
+<DatePicker key={timezone} value={startDate} onChange={setStartDate} />
+```
+
+## 확인 순서
+
+1. `DatePicker.tsx`에서 `useContext(TzContext)` 또는 `useTz()` 호출이 있는지 확인 -- 없으면 원인 1번 확정
+2. 있다면 timezone 값이 `useState` 초기값이나 `useMemo` deps에서만 쓰이는지 확인 -- deps 누락이면 원인 3번
+3. dayjs/moment 인스턴스가 컴포넌트 바깥(모듈 스코프)에서 생성되는지 확인 -- 있으면 원인 2번
+
+실제 파일을 읽어서 정확한 원인을 특정하고 싶으면 말씀해주세요.

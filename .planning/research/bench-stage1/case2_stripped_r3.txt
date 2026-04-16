@@ -1,0 +1,89 @@
+파일을 직접 못 보니까 대화 맥락 + 일반적인 React timezone 패턴 기반으로 추정합니다.
+
+## 원인 추정
+
+가장 가능성 높은 원인 3가지:
+
+### 1. DatePicker 내부에서 timezone을 초기값으로만 캡처
+
+```tsx
+// DatePicker.tsx — 이런 패턴이면 문제
+const DatePicker = () => {
+  const { timezone } = useTzContext();
+  const [date, setDate] = useState(() => dayjs().tz(timezone)); // timezone 변경돼도 state는 안 바뀜
+  // ...
+};
+```
+
+`useState` 초기화 함수는 최초 마운트에서만 실행됩니다. timezone이 바뀌어도 이미 설정된 `date` state는 갱신되지 않습니다.
+
+### 2. useEffect 의존성 배열에 timezone 누락
+
+```tsx
+useEffect(() => {
+  // date 관련 초기화 로직
+  setDisplayDate(formatInTz(selectedDate, timezone));
+}, [selectedDate]); // timezone이 deps에 없음 → timezone 변경 시 재실행 안 됨
+```
+
+### 3. memoization이 timezone 변경을 차단
+
+```tsx
+const formattedDate = useMemo(() => {
+  return formatDate(date, timezone);
+}, [date]); // timezone deps 누락 → 캐시된 이전 timezone 값 사용
+```
+
+## Fix 방향
+
+**A. timezone을 useEffect deps에 추가 + state 재계산**
+
+```tsx
+const DatePicker = () => {
+  const { timezone } = useTzContext();
+  const [date, setDate] = useState(() => dayjs().tz(timezone));
+
+  // timezone 변경 시 date를 새 timezone으로 재변환
+  useEffect(() => {
+    setDate(prev => prev.tz(timezone));
+  }, [timezone]);
+
+  // ...
+};
+```
+
+**B. key prop으로 강제 리마운트 (간단하지만 무거움)**
+
+```tsx
+// 부모에서
+<DatePicker key={timezone} />
+```
+
+timezone 바뀌면 컴포넌트가 완전히 언마운트/리마운트됩니다. state 초기화 문제를 한방에 해결하지만 성능 비용이 있고 사용자가 입력 중이던 값을 잃습니다.
+
+**C. 파생 상태로 전환 (권장)**
+
+date를 state로 관리하지 말고, timezone에서 파생된 값으로 처리:
+
+```tsx
+const DatePicker = () => {
+  const { timezone } = useTzContext();
+  const [rawDate, setRawDate] = useState(() => dayjs()); // UTC 기준
+
+  // timezone은 표시 시점에만 적용
+  const displayDate = useMemo(() => rawDate.tz(timezone), [rawDate, timezone]);
+
+  return <input value={displayDate.format('YYYY-MM-DD HH:mm')} />;
+};
+```
+
+이러면 rawDate는 timezone-agnostic하고, 표시만 timezone 반영하므로 timezone 변경이 즉시 반영됩니다.
+
+## 확인 포인트
+
+실제 파일을 볼 수 있으면 이 3가지를 체크하면 됩니다:
+1. `DatePicker.tsx`에서 `useState` 초기화에 timezone을 쓰는지
+2. `useEffect` / `useMemo` deps 배열에 timezone이 빠져있는지
+3. TzContext의 timezone 값이 실제로 변경될 때 re-render를 트리거하는지 (Provider value가 새 객체를 만드는지)
+
+파일 보여주면 정확한 라인 짚어서 패치 만들어드립니다.

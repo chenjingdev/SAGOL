@@ -1,81 +1,76 @@
 # SAGOL (사골)
 
-**Claude Code 서브에이전트 보고서 라우터 + 컨텍스트 청결 도구.**
+**Status: v1 폐기 (2026-04-16)**
 
-Claude Code 세션 안에서 서브에이전트가 만들어내는 긴 보고서를 자동으로 디스크 파일로 분리하고, 메인 에이전트의 컨텍스트에는 한 줄짜리 stripped form (`[report:<id>] <title>\n<summary>`) 만 남긴다. 이를 통해 메인 대화의 컨텍스트 오염을 측정 가능한 만큼 줄이는 게 목적이다. 이름은 "Claude Code를 사골처럼 쪽쪽 우려먹는다"는 Gemini 대화 밈에서 왔다.
+Claude Code 서브에이전트 보고서 라우터 + 컨텍스트 청결 도구. 서브에이전트가 만드는 긴 보고서를 디스크 파일로 분리하고, 메인 에이전트 컨텍스트에는 stripped marker만 남기는 MCP 서버.
 
-> **Status:** v1 Spike — 본인 머신에서만 동작. 멀티 사용자 배포/플러그인 매니페스트는 v2 이후.
-> **Last Phase 1 update:** 2026-04-15 — D-10 server-side stripping pivot 이후 앱 우선 작업 중.
+이름은 "Claude Code를 사골처럼 쪽쪽 우려먹는다"는 Gemini 대화 밈에서 왔다.
 
-## What it does
+## 가설
 
-서브에이전트(또는 임의의 MCP 호환 호출자)가 다음 MCP 툴을 호출한다:
+> 서브에이전트 보고서 본문을 메인 컨텍스트에서 제거하면 후속 응답 품질이 올라간다.
 
-```
-mcp__sagol__write_report({
-  title: string,
-  body: string,    // 보고서 본문 markdown 전체
-  source?: string, // "subagent name" 등 출처 태그
-})
-```
+정식 버전 (KILL_SWITCH.md):
+> PostToolUse hook + updatedMCPToolOutput으로 서브에이전트 보고서 본문을 메인 컨텍스트에서 제거하면 SWE-bench Pro task_success가 baseline 대비 +3%p 이상 올라간다.
 
-SAGOL MCP 서버(`src/mcp/server.ts`)는:
-1. 본문 전체를 `.sagol/reports/<id>.md` 에 frontmatter(id/title/source/timestamp/summary) 포함해서 저장
-2. **Tool response로는 stripped form만 반환**:
-   ```
-   [report:<id>] <title>
-   <summary>
-   
-   (full body persisted to .sagol/reports/<id>.md — read that file only if the summary is not enough to proceed)
-   ```
+## 구현
 
-메인 Claude Code 에이전트의 컨텍스트에는 본문이 절대 들어가지 않는다. 필요하면 메인 에이전트가 명시적으로 디스크 파일을 읽게 된다 — 그 읽기 행위 자체가 "본문이 컨텍스트로 올라갔다"는 로그 역할을 한다.
+MCP 서버(`src/mcp/server.ts`)가 `write_report` 도구를 제공. 본문은 `.sagol/reports/<id>.md`에 저장하고, tool response로는 `[report:<id>] <title>` stripped form만 반환. 본문이 애초에 메인 컨텍스트에 들어가지 않는 구조.
 
-## Architecture note — server-side stripping (2026-04-15 pivot)
+대시보드(`src/dash/`)는 보고서를 브라우저에서 열람하고 approve/reject/revise 피드백을 보내는 UI.
 
-v1 최초 설계는 Claude Code의 `PostToolUse` hook + `updatedMCPToolOutput` 으로 stripping을 하려고 했다. Phase 0 canary에서 `claude -p` headless 모드가 프로젝트 로컬 hook을 로드하지 않는다는 한계가 드러났고, Phase 1 HARD GATE에서 interactive 모드도 마찬가지임이 확인됐다. 상세는 [`.planning/research/HEADLESS_HOOK_LIMITATION.md`](./.planning/research/HEADLESS_HOOK_LIMITATION.md) 에 기록돼 있다.
+## 벤치마크 결과 — 효과 없음
 
-해결은 stripping을 MCP 서버 내부로 옮기는 것이다 — MCP stdio subprocess는 interactive/headless 양쪽에서 동일하게 spawn되므로, 서버가 tool response로 stripped form만 반환하면 hook 로딩 상태와 무관하게 동작한다. `scripts/strip-report.ts` (원래 hook 경로) 는 미래의 Claude Code 버전이 프로젝트 로컬 hook 로딩 버그를 고치는 날을 위해 dormant 상태로 보존돼 있다.
+### Stage 1 Case 1 (방법론 오류 → 폐기)
 
-이 피벗은 D-10 으로 `.planning/phases/01-stripping-path-interactive-mode-only/01-CONTEXT.md` 에 기록돼 있다.
+- 벤치마크 설계 자체가 SAGOL 메커니즘을 테스트하지 않았음
+- assistant 메시지 전체를 교체하는 방식 (SAGOL은 tool_result만 strip)
+- 서브에이전트에 도구 접근 허용 → 도구호출 2.7배 증가 관측 → noise로 판명
+- 상세: `.planning/research/bench-stage1/case1_verdict.md`
 
-## Repository layout
+### Stage 1 Case 2 (수정된 방법론)
 
-```
-.claude/settings.json    Claude Code 프로젝트 로컬 설정 — enabledMcpjsonServers: ["sagol"]
-.mcp.json                MCP 서버 등록 (canonical project-scoped 패턴)
-.planning/               GSD workflow 아티팩트 (ROADMAP / REQUIREMENTS / STATE / phases/*)
-.planning/research/      배경 연구 문서 (STACK, PITFALLS, HEADLESS_HOOK_LIMITATION, KILL_SWITCH...)
-.sagol/reports/          쓰여진 보고서 파일들 (gitignored)
-src/mcp/server.ts        SAGOL MCP 서버 — handleWriteReport가 server-side stripping 수행
-scripts/doctor.ts        환경 + 파일 + 라이브 MCP 핸드셰이크 진단
-scripts/verify-server-strip.ts  직접 import 기반 서버사이드 stripping 검증 (GREEN 필수)
-scripts/leak-check.ts    세션 트랜스크립트 대상 leak 감사 (현재 세션 상대는 경고만, 과거 세션은 --strict)
-scripts/strip-report.ts  Dormant — 미래 hook 경로 revival용 보존
-tests/mcp-server.test.ts bun test 유닛 스위트 — buildStripped / deriveSummary / handleWriteReport
-```
+설계:
+- 150K chars 실제 세션 filler + 합성 보고서 3,232 chars
+- baseline: tool_result에 full body / treatment: tool_result에 stripped marker 136 chars
+- assistant 요약 텍스트 양쪽 동일, tool_use/tool_result 구조 포함
+- N=3 per condition, "도구 사용 금지" 명시
 
-## Developer commands (this machine)
+결과:
 
-```bash
-bun install             # 한 번만
-bun run doctor          # 모든 게이트를 한 번에 확인 (25개 정도 GREEN)
-bun run test            # 유닛 테스트 11개
-bun run scripts/verify-server-strip.ts   # 직접 import 기반 stripping 증명
-bun run scripts/leak-check.ts            # 보고서 본문이 현재 CC 세션 트랜스크립트에 유출됐는지 확인
-```
+| Metric | Full (baseline) avg | Stripped (treatment) avg | Delta |
+|--------|---------------------|--------------------------|-------|
+| tool_uses | 19.0 | 15.0 | -21% |
+| total_tokens | 85,922 | 83,231 | -3.1% |
+| duration_ms | 118,225 | 102,531 | -13.3% |
+| 응답 품질 | neutral | neutral | 차이 없음 |
 
-`bun run doctor` 가 GREEN이면 이 저장소의 SAGOL 스택 전체가 건강함을 의미한다.
+- 6개 응답 전부 동일한 root causes (3개), 동일한 fix proposals (3개), 동일한 코드 예시 패턴
+- Case 1의 도구호출 증가는 재현 안 됨 (오히려 stripped가 적게 씀)
+- 상세: `.planning/research/bench-stage1/case2_verdict.md`
 
-## What v1 explicitly does NOT ship
+## 폐기 사유
 
-- 다른 프로젝트로 SAGOL을 install하는 `bunx sagol init` CLI — v2
-- Claude Code `.claude-plugin/` 매니페스트 — v2
-- 브라우저 대시보드 + 양방향 feedback — Phase 2
-- Caveman-report 코드 lift — Phase 2
-- 자동화된 SWE-bench Pro eval harness — 삭제됨. 벤치마크는 Phase 2 완료 후 수동 세션으로
-- `@anthropic-ai/sdk` 직접 호출 — 측정 변수 오염 위험, v1 전체 금지
+1. **축소 비율이 너무 작음.** 세션당 보고서 3-5개 × 3K = 15K chars. 200K+ 토큰 컨텍스트에서 3-5%. 모델이 이 정도 차이를 체감할 메커니즘이 약함.
+2. **현대 모델은 긴 컨텍스트를 잘 처리함.** 무관한 텍스트가 있어서 품질이 떨어지는 게 아니라, 관련 정보를 못 찾는 게 문제. 보고서 본문 제거는 후자에 해당 안 함.
+3. **KILL_SWITCH 기준 달성 불가.** task_success +3pp + 토큰 증가 0%. 2% 컨텍스트 축소로는 현실적 경로 없음.
+4. **토큰 절약은 미미.** stripped가 3.1% 적게 썼지만, 보고서 안 쓰고 짧게 답하는 것과 차이 없음.
+5. **UX 가치는 있으나 벤치마크 가설과 무관.** 보고서가 대시보드에 정리되는 건 편리하지만, "컨텍스트 청결이 품질을 올린다"는 가설은 지지되지 않음.
 
-## License / status
+## 타임라인
 
-아직 배포되지 않음. SAGOL v1은 저자의 개인 머신에서 가설을 실측하기 위한 실험 도구이다. 결과에 따라 폐기되거나 v2로 확장된다.
+| 날짜 | 사건 |
+|------|------|
+| 2026-04-07 | 프로젝트 시작, GSD 워크플로우 초기화 |
+| 2026-04-12 | Phase 0 완료 — PostToolUse hook 한계 발견, server-side stripping pivot |
+| 2026-04-13 | Phase 1 완료 — MCP 서버 + stripping + canary GREEN |
+| 2026-04-15 | Phase 2 완료 — 대시보드 + await_feedback + doctor |
+| 2026-04-15 | Phase 3 시작 — KILL_SWITCH 작성, Stage 1 벤치마크 |
+| 2026-04-16 | Stage 1 Case 1 실행 → 방법론 오류 발견 → Case 2 재설계/실행 → 효과 없음 확인 |
+| 2026-04-16 | **v1 폐기** |
+
+## 남는 것
+
+- `src/mcp/server.ts` — server-side stripping MCP 서버 패턴. 다른 프로젝트에서 MCP tool response를 가공하는 레퍼런스로 활용 가능.
+- `src/dash/` — Preact + Hono 기반 경량 대시보드. 보고서 열람/피드백 UI.
+- `.planning/research/KILL_SWITCH.md` — 가설 검증 프레임워크. pre-registered criteria + dated kill ceremony 패턴.

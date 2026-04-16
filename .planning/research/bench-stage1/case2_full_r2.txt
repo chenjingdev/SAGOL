@@ -1,0 +1,61 @@
+높은 확률로 원인은 DatePicker 내부에서 timezone 값을 초기 렌더 시점에만 캡처하고, 이후 context 변경을 구독하지 않는 패턴입니다.
+
+## 추정 원인 3가지
+
+**1. useState 초기값에 timezone을 박아놓는 패턴 (가장 유력)**
+
+```tsx
+const { timezone } = useTzContext();
+const [date, setDate] = useState(convertToTz(new Date(), timezone));
+```
+
+`useState` 초기값은 최초 마운트 시 1회만 평가됩니다. timezone이 바뀌어도 `date` state는 이전 timezone 기준 값을 유지합니다.
+
+**2. useMemo/useRef에 timezone을 dependency로 안 넣은 경우**
+
+```tsx
+const formattedDate = useMemo(() => formatInTz(date, timezone), [date]);
+// timezone이 deps에 빠져있음
+```
+
+또는 `useRef`로 timezone을 캐싱해놓고 갱신 안 하는 경우.
+
+**3. DatePicker 라이브러리(react-datepicker 등)에 timezone을 prop으로 넘기되, key를 안 바꾸는 경우**
+
+서드파티 DatePicker는 내부 state를 가지고 있어서 prop이 바뀌어도 내부 캘린더 UI를 재초기화하지 않는 경우가 많습니다.
+
+## Fix 방향
+
+**A. useEffect로 timezone 변경 감지 + state 재계산**
+
+```tsx
+const { timezone } = useTzContext();
+const [date, setDate] = useState(() => convertToTz(new Date(), timezone));
+
+useEffect(() => {
+  setDate(prev => reconvertToTz(prev, timezone));
+}, [timezone]);
+```
+
+**B. 서드파티 DatePicker를 쓰는 경우 — key에 timezone을 넣어서 강제 remount**
+
+```tsx
+<DatePicker key={timezone} timezone={timezone} value={date} />
+```
+
+이러면 timezone 변경 시 컴포넌트가 완전히 새로 마운트됩니다. 다만 사용자가 입력 중이던 값이 날아갈 수 있으므로, 입력 중 상태가 아닐 때만 적용하거나 A 방식을 우선 검토하는 게 좋습니다.
+
+**C. useMemo dependency 누락이면 단순 추가**
+
+```tsx
+const formattedDate = useMemo(() => formatInTz(date, timezone), [date, timezone]);
+```
+
+## 확인 순서
+
+1. `DatePicker.tsx`에서 `useTzContext()` 호출 위치와 반환값 사용 패턴 확인
+2. `useState` 초기값에 timezone이 들어가는지 확인
+3. `useMemo`/`useCallback` deps 배열에서 timezone 누락 여부 확인
+4. 서드파티 DatePicker 라이브러리를 wrapping하는 구조인지, 순수 자체 구현인지 확인
+
+실제 파일을 읽으면 정확히 어느 패턴인지 바로 특정할 수 있습니다. 확인해볼까요?

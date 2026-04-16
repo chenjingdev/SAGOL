@@ -1,0 +1,20 @@
+{
+  "case": "case2_corrected_methodology",
+  "filler_source": "/Users/laonpeople/.claude/projects/-Users-laonpeople-dev-ezplanet-portal-gateway-web/652d855b-c87d-49ae-ba91-42957b485f9f.jsonl",
+  "filler_turns": 323,
+  "filler_chars": 146303,
+  "prompt_full_chars": 150557,
+  "prompt_stripped_chars": 147461,
+  "char_reduction": 3096,
+  "reduction_pct": 2.056364034883798,
+  "report_body_chars": 3232,
+  "stripped_marker_chars": 136,
+  "assistant_summary_chars": 219,
+  "followup_chars": 211,
+  "methodology_fixes": [
+    "assistant message = summary text (identical in both conditions)",
+    "tool_use/tool_result structure present in both conditions",
+    "only tool_result content differs (full body vs stripped marker)",
+    "subagent instructed: no tool usage, text-only response"
+  ]
+}
