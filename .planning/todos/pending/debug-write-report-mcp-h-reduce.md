@@ -21,8 +21,9 @@ Both attempts had valid body strings (one ~4KB, one ~3KB markdown). Second attem
 ## Impact
 
 - write_report is the v1 app's primary MCP surface
-- During the benchmark we had to fall back to writing directly to `.planning/research/` — operational degradation
-- Any user attempting to use SAGOL v1 may encounter this
+- **CORRECTION (2026-04-16):** the file write itself **succeeds** — both failed calls from this benchmark session wrote valid markdown files to `.sagol/reports/` (see `1776297784127-03c2e145.md`, `1776297834602-33481f15.md`). The error is in the MCP response serialization path, NOT the write path.
+- Behavior from caller's perspective: tool appears to fail, but artifact is produced. Misleading — masks success.
+- Any user attempting to use SAGOL v1 may see the error message and assume the write failed, leading to redundant retries or fallback work.
 
 ## Hypothesis (unverified)
 
